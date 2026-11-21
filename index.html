@@ -36,6 +36,13 @@ h2{font-size:18px;margin:18px 0 0;text-align:left}
 label{display:block;text-align:left;font-weight:600;margin-top:12px;font-size:16px}
 input[type=range]{width:100%;height:36px;accent-color:#1565d8}
 .note{font-size:13px;margin-top:14px;opacity:.8}
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
+.modes button{background:#fff;color:#14304f;font-size:15px;min-height:60px;line-height:1.1;padding:4px}
+.modes button.sel{background:#ffb300;color:#14304f}
+.hint{font-size:14px;min-height:20px;margin:4px 0 0}
+.mic{display:inline-block;width:10px;height:10px;border-radius:50%;background:#e53935;margin-right:6px;animation:pulse 1s infinite alternate}
+@keyframes pulse{to{opacity:.3}}
+#secwrap{display:none}
 </style>
 </head>
 <body>
@@ -57,6 +64,14 @@ input[type=range]{width:100%;height:36px;accent-color:#1565d8}
     <div class="song" id="song">Tap the big button to start</div>
     <div class="dots" id="dots"></div>
   </div>
+  <div class="modes" id="modes">
+    <button data-m="voice" class="sel">🎤 Listens to me read</button>
+    <button data-m="timer">⏱ Timer</button>
+    <button data-m="tap">👆 I'll tap</button>
+  </div>
+  <div id="secwrap"><label for="secs">Seconds per page: <b id="secv">20</b></label>
+  <input id="secs" type="range" min="8" max="45" value="20"></div>
+  <p class="hint" id="hint">Say the animal names as you read and the sounds play by themselves.</p>
   <button id="next">▶ Start story</button>
   <div class="row">
     <button id="back">◀ Back</button>
@@ -69,7 +84,7 @@ input[type=range]{width:100%;height:36px;accent-color:#1565d8}
   <input id="mvol" type="range" min="0" max="100" value="35">
   <label for="bvol">Birds volume</label>
   <input id="bvol" type="range" min="0" max="100" value="25">
-  <p class="note">Tap the big button each time you turn the page. Streams Epidemic Sound previews, so it needs internet.</p>
+  <p class="note">The big button still works in any mode if you want to skip ahead. Streams Epidemic Sound previews, so it needs internet.</p>
 </main>
 <script>
 {
@@ -88,13 +103,13 @@ const S={
 for(const k in S){const x=new Audio(A+S[k].f);x.preload="auto";S[k].a=x}
 const pages=[
   {n:"First page",w:"Beep! Beep!",s:[["horn",0]]},
-  {n:"Page 2",w:"Sheep",s:[["sheep",0]]},
-  {n:"Page 3",w:"Duck",s:[["duck",0]]},
-  {n:"Page 4",w:"Cow",s:[["cow",0]]},
-  {n:"Page 5",w:"Pig",s:[["pig",0]]},
-  {n:"Page 6",w:"Bunny",s:[["bunny",0],["bunny",900]]},
-  {n:"Page 7",w:"Chicken",s:[["hen",0],["chicks",2200]]},
-  {n:"Last page",w:"The End",s:[["horn",0]],end:true}
+  {n:"Page 2",w:"Sheep",s:[["sheep",0]],k:["sheep","lamb","baa"]},
+  {n:"Page 3",w:"Duck",s:[["duck",0]],k:["duck","quack"]},
+  {n:"Page 4",w:"Cow",s:[["cow",0]],k:["cow","calf","moo"]},
+  {n:"Page 5",w:"Pig",s:[["pig",0]],k:["pig","oink"]},
+  {n:"Page 6",w:"Bunny",k:["bunny","bunnies","rabbit","hop"],s:[["bunny",0],["bunny",900]]},
+  {n:"Page 7",w:"Chicken",k:["chicken","chick","hen","peep"],s:[["hen",0],["chicks",2200]]},
+  {n:"Last page",w:"The End",k:["beep","the end"],s:[["horn",0]],end:true}
 ];
 const buttons=[["sheep","🐑","Sheep"],["duck","🦆","Duck"],["cow","🐄","Cow"],["pig","🐷","Pig"],["bunny","🐰","Bunny"],["hen","🐔","Chicken"],["toad","🐸","Toad"],["horn","🚚","Beep!"]];
 const songs=[
@@ -126,6 +141,32 @@ const playPage=()=>{
     $("app").classList.remove("playing");$("song").textContent="Thanks for reading!";
   } else duckMusic(longest);
 };
+let mode="voice",rec=null,listening=false,timerT=null,lastHeard=0;
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const hint=t=>{$("hint").innerHTML=t};
+$("modes").onclick=ev=>{const b=ev.target.closest("button");if(!b||started)return;mode=b.dataset.m;
+  [...$("modes").children].forEach(x=>x.classList.toggle("sel",x===b));
+  $("secwrap").style.display=mode==="timer"?"block":"none";
+  hint(mode==="voice"?(SR?"Say the animal names as you read and the sounds play by themselves.":"This browser can't listen. Try Chrome, or use Timer."):mode==="timer"?"Pages turn on their own. Set how long you spend on each page.":"Tap the big button each time you turn the page.")};
+$("secs").oninput=()=>{$("secv").textContent=$("secs").value};
+const advance=()=>{if(p<pages.length-1){p++;render();playPage();if(pages[p].end)stopAuto();else if(mode==="timer")schedule()}};
+const schedule=()=>{clearTimeout(timerT);timerT=setTimeout(()=>{if(!paused)advance();else schedule()},$("secs").value*1000)};
+const startVoice=()=>{
+  if(!SR){hint("This browser can't listen. Switch to Timer or tap.");return}
+  rec=new SR();rec.continuous=true;rec.interimResults=true;rec.lang="en-US";
+  rec.onresult=e=>{
+    let txt="";for(let i=e.resultIndex;i<e.results.length;i++)txt+=" "+e.results[i][0].transcript.toLowerCase();
+    if(paused||Date.now()-lastHeard<2500)return;
+    for(let j=p+1;j<pages.length&&j<=p+2;j++){if(pages[j].end&&j!==p+1)continue;
+      if((pages[j].k||[]).some(w=>new RegExp("\\b"+w).test(txt))){lastHeard=Date.now();p=j-1;advance();try{rec.abort()}catch(_){}return}
+    }
+  };
+  rec.onend=()=>{if(listening)setTimeout(()=>{try{rec.start()}catch(_){}},250)};
+  rec.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"){listening=false;hint("Microphone blocked. Allow it in your browser settings, or use Timer.")}};
+  listening=true;try{rec.start()}catch(_){}
+  hint('<span class="mic"></span>Listening. Read along and the animals will join in.');
+};
+const stopAuto=()=>{clearTimeout(timerT);listening=false;if(rec){try{rec.abort()}catch(_){}}if(mode!=="tap")hint("The End. Tap the big button to read it again.")};
 const render=()=>{
   const pg=pages[p];
   $("num").textContent=pg?pg.n:"Cover";
@@ -135,22 +176,24 @@ const render=()=>{
   $("next").textContent=!started?"▶ Start story":nx?"Next page: "+nx.w:"↺ Read it again";
 };
 $("next").onclick=()=>{
-  if(p>=pages.length-1){p=-1;started=false;ended=false;music.pause();birds.pause()}
+  if(p>=pages.length-1){p=-1;started=false;ended=false;music.pause();birds.pause();stopAuto()}
   if(!started){
     started=true;ended=false;paused=false;$("pause").textContent="Pause";
     $("app").classList.add("playing");
     birds.volume=bv();birds.currentTime=0;birds.play().catch(()=>{});
     setTimeout(()=>playSong(0),1500);
   }
-  p++;render();playPage();
+  const first=p<0;p++;render();playPage();
+  if(first){if(mode==="timer")schedule();else if(mode==="voice")startVoice()}
+  else if(mode==="timer")schedule();
 };
-$("back").onclick=()=>{if(p>0){p--;if(ended){ended=false;music.play().catch(()=>{});fade(music,mv(),1500);birds.play().catch(()=>{});fade(birds,bv(),1500);$("app").classList.add("playing");showSong()}render();playPage()}};
+$("back").onclick=()=>{if(p>0){p--;if(mode==="timer")schedule();if(mode==="voice"&&!listening)startVoice();if(ended){ended=false;music.play().catch(()=>{});fade(music,mv(),1500);birds.play().catch(()=>{});fade(birds,bv(),1500);$("app").classList.add("playing");showSong()}render();playPage()}};
 $("again").onclick=()=>{if(p>=0)playPage()};
 $("pause").onclick=()=>{
   if(!started||ended)return;
   paused=!paused;
-  if(paused){music.pause();birds.pause();$("pause").textContent="Play";$("app").classList.remove("playing")}
-  else{music.play().catch(()=>{});birds.play().catch(()=>{});$("pause").textContent="Pause";$("app").classList.add("playing")}
+  if(paused){music.pause();birds.pause();if(mode==="voice")hint("Paused. Not listening.");$("pause").textContent="Play";$("app").classList.remove("playing")}
+  else{music.play().catch(()=>{});birds.play().catch(()=>{});$("pause").textContent="Pause";$("app").classList.add("playing");if(mode==="voice"&&listening)hint('<span class="mic"></span>Listening. Read along and the animals will join in.')}
 };
 $("animals").innerHTML=buttons.map(([k,e,n])=>`<button data-k="${k}"><span>${e}</span>${n}</button>`).join('');
 $("animals").onclick=ev=>{const b=ev.target.closest("button");if(!b)return;const k=b.dataset.k;sfx(k,0);duckMusic(S[k].max);b.classList.add("hit");setTimeout(()=>b.classList.remove("hit"),S[k].max*1000)};
