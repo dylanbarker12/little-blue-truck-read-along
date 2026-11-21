@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Little Blue Truck Read-Along</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:"Baloo 2",system-ui,sans-serif;background:linear-gradient(#bfe6ff 0 55%,#8fd16a 55%);min-height:100vh;color:#14304f;display:flex;justify-content:center}
+main{width:100%;max-width:520px;padding:24px 18px 40px;text-align:center}
+h1{font-size:32px;line-height:1.05;margin:4px 0 2px;color:#0a4fa8}
+.sub{margin:0 0 14px;font-size:16px}
+svg.truck{width:min(320px,80vw);height:auto;display:block;margin:0 auto}
+.playing .truck{animation:bob .6s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.playing .truck{animation:none}}
+.now{background:#fff;border-radius:16px;padding:12px 14px;margin:14px 0;box-shadow:0 3px 0 #0003;font-size:17px}
+.now b{display:block;font-size:20px;color:#0a4fa8}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{font:inherit;font-size:20px;font-weight:800;border:0;border-radius:16px;min-height:60px;cursor:pointer;box-shadow:0 4px 0 #0004;color:#fff}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #0004}
+#start{background:#1565d8;grid-column:1/-1;font-size:24px;min-height:72px}
+#beep{background:#e53935;grid-column:1/-1;font-size:30px;min-height:96px}
+#pause{background:#5c6bc0}#next{background:#2e7d32}
+label{display:block;text-align:left;font-weight:600;margin-top:14px;font-size:16px}
+input[type=range]{width:100%;height:36px;accent-color:#1565d8}
+.list{background:#ffffffcc;border-radius:14px;padding:10px 14px;margin-top:16px;text-align:left;font-size:15px}
+.list li.on{font-weight:800;color:#0a4fa8}
+.note{font-size:13px;margin-top:14px;opacity:.8}
+</style>
+</head>
+<body>
+<main id="app">
+  <h1>Little Blue Truck<br>Springtime</h1>
+  <p class="sub">Read-along soundtrack</p>
+  <svg class="truck" viewBox="0 0 240 140" aria-hidden="true">
+    <rect x="20" y="58" width="120" height="44" rx="8" fill="#1e6fe0"/>
+    <path d="M140 40h46l28 30v32h-74z" fill="#2b80f0"/>
+    <path d="M150 48h32l20 22h-52z" fill="#d9f1ff"/>
+    <rect x="20" y="58" width="120" height="8" fill="#5aa2ff"/>
+    <circle cx="62" cy="106" r="18" fill="#222"/><circle cx="62" cy="106" r="7" fill="#ccc"/>
+    <circle cx="182" cy="106" r="18" fill="#222"/><circle cx="182" cy="106" r="7" fill="#ccc"/>
+    <circle cx="211" cy="84" r="5" fill="#ffe066"/>
+    <circle cx="40" cy="42" r="9" fill="#ff8fb3"/><circle cx="56" cy="36" r="8" fill="#ffd54f"/><circle cx="72" cy="44" r="9" fill="#ff8fb3"/>
+  </svg>
+  <div class="now" id="now"><b>Ready to roll</b>Press Start, then begin reading</div>
+  <div class="btns">
+    <button id="start">▶ Start story</button>
+    <button id="beep">Beep! Beep!</button>
+    <button id="pause">Pause</button>
+    <button id="next">Next song</button>
+  </div>
+  <label for="mvol">Music volume</label>
+  <input id="mvol" type="range" min="0" max="100" value="35">
+  <label for="bvol">Birds volume</label>
+  <input id="bvol" type="range" min="0" max="100" value="25">
+  <ol class="list" id="list"></ol>
+  <p class="note">Streams Epidemic Sound preview audio. Needs an internet connection. Tap Beep! whenever Blue says it.</p>
+</main>
+<script>
+{
+const CDN="https://audiocdn.epidemicsound.com/lqmp3/";
+const songs=[
+  {t:"Happy Trails",part:"Blue drives into spring",f:"01KJYKZVYSHC3X1E2WCTMFZDNH.mp3"},
+  {t:"Between Two Pines",part:"Meeting the baby animals",f:"01KJYDD3GE2YCY73XBKSK87MAP.mp3"},
+  {t:"Campfire Blues",part:"Winding down to the end",f:"01KJVY7XANEN5EKXDJ74SEC88X.mp3"}
+];
+const music=new Audio(), birds=new Audio(CDN+"01KJFP3Y19XQ0YSYEDFH6S9J9P.mp3"), horn=new Audio(CDN+"01KHYF724Q4A46MBZ4M36GF375.mp3");
+birds.loop=true;
+const $=id=>document.getElementById(id);
+let i=0, started=false, paused=false;
+const mv=()=>$("mvol").value/100, bv=()=>$("bvol").value/100;
+music.volume=mv(); birds.volume=bv(); horn.volume=1;
+const list=$("list");
+const render=()=>{list.innerHTML=songs.map((s,k)=>`<li class="${started&&k===i?'on':''}">${s.part}: ${s.t}</li>`).join('')};
+const show=(a,b)=>{$("now").innerHTML=`<b>${a}</b>${b}`};
+const fade=(a,to,ms,done)=>{const from=a.volume,st=performance.now();const step=n=>{const p=Math.min(1,(n-st)/ms);a.volume=from+(to-from)*p;p<1?requestAnimationFrame(step):done&&done()};requestAnimationFrame(step)};
+const play=k=>{
+  if(k>=songs.length){show("The End","Beep! Thanks for reading");fade(birds,0,4000,()=>birds.pause());document.body.classList.remove("playing");horn.currentTime=0;horn.play().catch(()=>{});return}
+  i=k;music.src=CDN+songs[i].f;music.volume=0;
+  music.play().then(()=>fade(music,mv(),2500)).catch(()=>show("Couldn't play","Tap Start again"));
+  show(songs[i].t,songs[i].part);render();
+};
+music.addEventListener("timeupdate",()=>{if(music.duration&&music.duration-music.currentTime<3&&!music._f){music._f=1;fade(music,0,2800)}});
+music.addEventListener("playing",()=>{music._f=0});
+music.addEventListener("ended",()=>play(i+1));
+$("start").onclick=()=>{
+  started=true;paused=false;$("pause").textContent="Pause";
+  document.getElementById("app").classList.add("playing");
+  horn.currentTime=0;horn.play().catch(()=>{});
+  birds.volume=bv();birds.currentTime=0;birds.play().catch(()=>{});
+  setTimeout(()=>play(0),1200);
+};
+$("beep").onclick=()=>{horn.currentTime=0;horn.play().catch(()=>{})};
+$("pause").onclick=()=>{
+  if(!started)return;
+  paused=!paused;
+  if(paused){music.pause();birds.pause();$("pause").textContent="Resume";$("app").classList.remove("playing")}
+  else{music.play().catch(()=>{});birds.play().catch(()=>{});$("pause").textContent="Pause";$("app").classList.add("playing")}
+};
+$("next").onclick=()=>{if(!started)return;fade(music,0,800,()=>play(i+1))};
+$("mvol").oninput=()=>{music.volume=mv()};
+$("bvol").oninput=()=>{birds.volume=bv()};
+render();
+}
+</script>
+</body>
+</html>
