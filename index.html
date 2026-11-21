@@ -28,6 +28,11 @@ input[type=range]{width:100%;height:36px;accent-color:#1565d8}
 .list{background:#ffffffcc;border-radius:14px;padding:10px 14px;margin-top:16px;text-align:left;font-size:15px}
 .list li.on{font-weight:800;color:#0a4fa8}
 .note{font-size:13px;margin-top:14px;opacity:.8}
+.animals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.animals button{background:#fff;color:#14304f;font-size:17px;min-height:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:6px}
+.animals button span{font-size:34px;line-height:1}
+.animals button.hit{background:#ffe066}
+h2{font-size:20px;margin:18px 0 0;text-align:left}
 </style>
 </head>
 <body>
@@ -51,12 +56,14 @@ input[type=range]{width:100%;height:36px;accent-color:#1565d8}
     <button id="pause">Pause</button>
     <button id="next">Next song</button>
   </div>
+  <h2>Animal sounds: tap when you lift a flap</h2>
+  <div class="animals" id="animals"></div>
   <label for="mvol">Music volume</label>
   <input id="mvol" type="range" min="0" max="100" value="35">
   <label for="bvol">Birds volume</label>
   <input id="bvol" type="range" min="0" max="100" value="25">
   <ol class="list" id="list"></ol>
-  <p class="note">Streams Epidemic Sound preview audio. Needs an internet connection. Tap Beep! whenever Blue says it.</p>
+  <p class="note">Streams Epidemic Sound preview audio. Needs an internet connection. Tap an animal when you lift its flap. The music dips so the sound comes through.</p>
 </main>
 <script>
 {
@@ -102,6 +109,31 @@ $("pause").onclick=()=>{
 $("next").onclick=()=>{if(!started)return;fade(music,0,800,()=>play(i+1))};
 $("mvol").oninput=()=>{music.volume=mv()};
 $("bvol").oninput=()=>{birds.volume=bv()};
+const A="https://audiocdn.epidemicsound.com/lqmp3/";
+const animals=[
+  {n:"Toad",e:"🐸",f:"01KK2DJ2301PQ99CTCD7Q48FQ9.mp3",max:3},
+  {n:"Ducklings",e:"🦆",f:"01KJFC16SG6XMM9SCATCXQK88B.mp3",max:3},
+  {n:"Chicks",e:"🐥",f:"01KHP52CK8ZNJ7YSPECEDYJPW6.mp3",max:4},
+  {n:"Lambs",e:"🐑",f:"01KJAFQ083B68YZ0DMAQE5GH04.mp3",max:4},
+  {n:"Calf",e:"🐄",f:"01KJ6EXPMPJQRS4FJ4YK4Y1Y6P.mp3",max:3},
+  {n:"Piglets",e:"🐷",f:"01KK1DWWEN8045601HKNB7JKZ1.mp3",max:4},
+  {n:"Foal",e:"🐴",f:"01KJ2F4008SKW3ZP3ZD9Z0EJST.mp3",max:3},
+  {n:"Goats",e:"🐐",f:"01KJQK4KJH77TN1KE31RHK5TEW.mp3",max:3},
+  {n:"Beep!",e:"🚚",f:"01KHYF724Q4A46MBZ4M36GF375.mp3",max:3}
+];
+const sfx=animals.map(a=>{const x=new Audio(A+a.f);x.preload="auto";return x});
+let duckT;
+const duckMusic=sec=>{if(!music.src||music.paused)return;clearTimeout(duckT);fade(music,mv()*0.35,250);duckT=setTimeout(()=>fade(music,mv(),900),sec*1000)};
+$("animals").innerHTML=animals.map((a,k)=>`<button data-k="${k}"><span>${a.e}</span>${a.n}</button>`).join('');
+$("animals").onclick=ev=>{
+  const b=ev.target.closest("button");if(!b)return;
+  const k=+b.dataset.k,a=animals[k],x=sfx[k];
+  sfx.forEach(o=>{if(o!==x&&!o.paused){o.pause()}});
+  x.currentTime=0;x.volume=1;x.play().catch(()=>{});
+  clearTimeout(x._t);x._t=setTimeout(()=>fade(x,0,400,()=>x.pause()),a.max*1000);
+  b.classList.add("hit");setTimeout(()=>b.classList.remove("hit"),a.max*1000);
+  duckMusic(a.max);
+};
 render();
 }
 </script>
