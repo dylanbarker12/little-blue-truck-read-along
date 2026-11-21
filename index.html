@@ -118,19 +118,31 @@ const songs=[
   {t:"Campfire Blues",f:"01KJVY7XANEN5EKXDJ74SEC88X.mp3"}
 ];
 const $=id=>document.getElementById(id);
-const music=new Audio(), birds=new Audio(A+"01KJFP3Y19XQ0YSYEDFH6S9J9P.mp3");
+const music=new Audio(), birds=new Audio();
+const BIRDS=A+"01KJFP3Y19XQ0YSYEDFH6S9J9P.mp3";
+let ctx=null, cors=null;
+fetch(BIRDS,{method:"HEAD",mode:"cors"}).then(r=>{cors=r.ok}).catch(()=>{cors=false});
+const getV=a=>a._g?a._g.gain.value:a.volume;
+const setV=(a,v)=>{if(a._g)a._g.gain.value=v;else a.volume=v};
+const wire=()=>{
+  if(ctx||cors!==true)return;
+  try{
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    for(const a of [music,birds]){a.crossOrigin="anonymous";const g=ctx.createGain();ctx.createMediaElementSource(a).connect(g);g.connect(ctx.destination);a._g=g}
+  }catch(e){ctx=null}
+};
 birds.loop=true;
 let p=-1, si=0, started=false, paused=false, ended=false, duckT;
 const mv=()=>$("mvol").value/100, bv=()=>$("bvol").value/100;
-const fade=(a,to,ms,done)=>{clearInterval(a._fi);const from=a.volume,st=Date.now();a._fi=setInterval(()=>{const k=Math.min(1,(Date.now()-st)/ms);a.volume=Math.max(0,Math.min(1,from+(to-from)*k));if(k>=1){clearInterval(a._fi);done&&done()}},40)};
-const playSong=k=>{si=k%songs.length;music.src=A+songs[si].f;music.volume=0;music.play().then(()=>fade(music,mv(),2500)).catch(()=>{});showSong()};
+const fade=(a,to,ms,done)=>{clearInterval(a._fi);const from=getV(a),st=Date.now();a._fi=setInterval(()=>{const k=Math.min(1,(Date.now()-st)/ms);setV(a,Math.max(0,Math.min(1,from+(to-from)*k)));if(k>=1){clearInterval(a._fi);done&&done()}},40)};
+const playSong=k=>{si=k%songs.length;music.src=A+songs[si].f;setV(music,0);music.play().then(()=>fade(music,mv(),2500)).catch(()=>{});showSong()};
 const showSong=()=>{if(started&&!ended)$("song").textContent="Music: "+songs[si].t};
 music.addEventListener("timeupdate",()=>{if(music.duration&&music.duration-music.currentTime<3&&!music._f){music._f=1;fade(music,0,2800)}});
 music.addEventListener("playing",()=>{music._f=0});
 music.addEventListener("ended",()=>{if(!ended)playSong(si+1)});
 const duckMusic=sec=>{if(!started||ended||paused)return;clearTimeout(duckT);fade(music,mv()*0.3,250);duckT=setTimeout(()=>fade(music,mv(),900),sec*1000)};
 const sfx=(key,delay)=>setTimeout(()=>{
-  const x=S[key].a;x.pause();x.currentTime=0;x.volume=1;x.play().catch(()=>{});
+  const x=S[key].a;x.pause();x.currentTime=0;setV(x,1);x.play().catch(()=>{});
   clearTimeout(x._t);x._t=setTimeout(()=>fade(x,0,400,()=>x.pause()),S[key].max*1000);
 },delay);
 const playPage=()=>{
@@ -180,7 +192,7 @@ $("next").onclick=()=>{
   if(!started){
     started=true;ended=false;paused=false;$("pause").textContent="Pause";
     $("app").classList.add("playing");
-    birds.volume=bv();birds.currentTime=0;birds.play().catch(()=>{});
+    wire();if(ctx&&ctx.state!=="running")ctx.resume();if(!birds.src)birds.src=BIRDS;setV(birds,bv());birds.currentTime=0;birds.play().catch(()=>{});if(!ctx&&/iP(hone|ad|od)/.test(navigator.userAgent))hint("Heads up: iPhone ignores the volume sliders for this audio. Use the phone volume buttons.");
     setTimeout(()=>playSong(0),1500);
   }
   const first=p<0;p++;render();playPage();
@@ -197,8 +209,8 @@ $("pause").onclick=()=>{
 };
 $("animals").innerHTML=buttons.map(([k,e,n])=>`<button data-k="${k}"><span>${e}</span>${n}</button>`).join('');
 $("animals").onclick=ev=>{const b=ev.target.closest("button");if(!b)return;const k=b.dataset.k;sfx(k,0);duckMusic(S[k].max);b.classList.add("hit");setTimeout(()=>b.classList.remove("hit"),S[k].max*1000)};
-$("mvol").oninput=()=>{if(!paused&&!ended)music.volume=mv()};
-$("bvol").oninput=()=>{birds.volume=bv()};
+$("mvol").oninput=()=>{if(!paused&&!ended){clearInterval(music._fi);setV(music,mv())}};
+$("bvol").oninput=()=>{clearInterval(birds._fi);setV(birds,bv())};
 render();
 }
 </script>
